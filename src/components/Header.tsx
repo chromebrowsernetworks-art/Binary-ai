@@ -2,7 +2,8 @@ import React from 'react';
 import { 
   Trash2, 
   SlidersHorizontal,
-  ChevronDown
+  ChevronDown,
+  Key
 } from 'lucide-react';
 import { Persona, AIModelOption } from '../types';
 
@@ -13,6 +14,7 @@ interface HeaderProps {
   availableModels: AIModelOption[];
   onOpenPersonaModal: () => void;
   onOpenGuideModal: () => void;
+  onOpenApiKeyModal?: () => void;
   onClearChat: () => void;
   messageCount: number;
   isStreaming: boolean;
@@ -26,6 +28,7 @@ export const Header: React.FC<HeaderProps> = ({
   availableModels,
   onOpenPersonaModal,
   onOpenGuideModal,
+  onOpenApiKeyModal,
   onClearChat,
   messageCount,
   isStreaming,
@@ -109,6 +112,18 @@ export const Header: React.FC<HeaderProps> = ({
           >
             &lt;/&gt;
           </button>
+
+          {/* API Key Modal Button */}
+          {onOpenApiKeyModal && (
+            <button
+              type="button"
+              onClick={onOpenApiKeyModal}
+              className="w-8 h-8 sm:w-9 sm:h-9 rounded-full border border-stone-300 hover:border-emerald-500 bg-white hover:bg-emerald-50/50 flex items-center justify-center text-stone-700 hover:text-emerald-700 transition-all shadow-2xs cursor-pointer"
+              title="Configure API Key (For GitHub Pages)"
+            >
+              <Key className="w-3.5 h-3.5" />
+            </button>
+          )}
 
           {/* Clear conversation */}
           {messageCount > 0 && (

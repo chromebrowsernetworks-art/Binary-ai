@@ -5,9 +5,11 @@ import { ChatInput } from './components/ChatInput';
 import { EmptyState } from './components/EmptyState';
 import { PersonaModal } from './components/PersonaModal';
 import { BeginnerGuideModal } from './components/BeginnerGuideModal';
+import { ApiKeyModal } from './components/ApiKeyModal';
 import { BinaryStreamBackground } from './components/BinaryStreamBackground';
 import { Message, Persona, AIModelOption } from './types';
 import { DEFAULT_PERSONAS } from './personas';
+import { callClientGeminiStream } from './lib/geminiClient';
 
 const DEFAULT_MODELS: AIModelOption[] = [
   { id: 'gemini-3.7-flash', name: 'Binary 2.0', provider: 'gemini', badge: 'Flagship' },
@@ -24,6 +26,10 @@ export default function App() {
   const [apiKeyReady, setApiKeyReady] = useState(true);
   const [isPersonaModalOpen, setIsPersonaModalOpen] = useState(false);
   const [isGuideModalOpen, setIsGuideModalOpen] = useState(false);
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(false);
+  const [clientApiKey, setClientApiKey] = useState<string>(() => {
+    return localStorage.getItem('gemini_api_key') || ((import.meta as any).env?.VITE_GEMINI_API_KEY as string) || '';
+  });
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const abortControllerRef = useRef<AbortController | null>(null);
@@ -31,7 +37,10 @@ export default function App() {
   // Check health status on mount
   useEffect(() => {
     fetch('/api/health')
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error('No backend');
+        return res.json();
+      })
       .then((data) => {
         if (data.availableModels && Array.isArray(data.availableModels)) {
           setAvailableModels(data.availableModels);
@@ -43,8 +52,17 @@ export default function App() {
           setApiKeyReady(data.hasApiKey);
         }
       })
-      .catch((err) => console.log('Health check error:', err));
-  }, []);
+      .catch((err) => {
+        console.log('Health check notice (Static/GitHub Pages mode):', err);
+        setApiKeyReady(!!clientApiKey);
+      });
+  }, [clientApiKey]);
+
+  const handleSaveApiKey = (key: string) => {
+    setClientApiKey(key);
+    localStorage.setItem('gemini_api_key', key);
+    setApiKeyReady(!!key);
+  };
 
   // Smooth scroll to bottom when messages update
   const scrollToBottom = () => {
@@ -116,33 +134,71 @@ export default function App() {
         content: m.content,
       }));
 
-      const response = await fetch('/api/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          messages: payloadMessages,
-          systemInstruction: currentPersona.systemInstruction,
-          model: selectedModel,
-        }),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        let errDetails = 'Failed to generate response';
-        try {
-          const errJson = await response.json();
-          errDetails = errJson.error || errDetails;
-        } catch {
-          // Fallback
-        }
-        throw new Error(errDetails);
+      // Try server endpoint first
+      let usedClientFallback = false;
+      let serverResponse: Response | null = null;
+      try {
+        serverResponse = await fetch('/api/chat', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            messages: payloadMessages,
+            systemInstruction: currentPersona.systemInstruction,
+            model: selectedModel,
+          }),
+          signal: controller.signal,
+        });
+      } catch {
+        usedClientFallback = true;
       }
 
-      if (!response.body) {
+      if (!serverResponse || !serverResponse.ok) {
+        usedClientFallback = true;
+      }
+
+      if (usedClientFallback) {
+        // Fallback for static hosting / GitHub Pages
+        const keyToUse = clientApiKey || ((import.meta as any).env?.VITE_GEMINI_API_KEY as string);
+        if (!keyToUse) {
+          setIsApiKeyModalOpen(true);
+          throw new Error('On GitHub Pages (static hosting), please enter your Gemini API key using the Key icon in the top header to enable chat responses.');
+        }
+
+        let accumulatedText = '';
+        await callClientGeminiStream({
+          apiKey: keyToUse,
+          model: selectedModel,
+          messages: payloadMessages,
+          systemInstruction: currentPersona.systemInstruction,
+          signal: controller.signal,
+          onChunk: (chunk) => {
+            accumulatedText += chunk;
+            setMessages((prev) =>
+              prev.map((msg) =>
+                msg.id === assistantPlaceholderId
+                  ? { ...msg, content: accumulatedText }
+                  : msg
+              )
+            );
+          },
+        });
+
+        setMessages((prev) =>
+          prev.map((msg) =>
+            msg.id === assistantPlaceholderId
+              ? { ...msg, isStreaming: false, content: accumulatedText || '(No output produced)' }
+              : msg
+          )
+        );
+        return;
+      }
+
+      // Stream from server SSE
+      if (!serverResponse || !serverResponse.body) {
         throw new Error('No readable stream available in response.');
       }
 
-      const reader = response.body.getReader();
+      const reader = serverResponse.body.getReader();
       const decoder = new TextDecoder('utf-8');
       let accumulatedText = '';
 
@@ -227,6 +283,7 @@ export default function App() {
         availableModels={availableModels}
         onOpenPersonaModal={() => setIsPersonaModalOpen(true)}
         onOpenGuideModal={() => setIsGuideModalOpen(true)}
+        onOpenApiKeyModal={() => setIsApiKeyModalOpen(true)}
         onClearChat={handleClearChat}
         messageCount={messages.length}
         isStreaming={isStreaming}
@@ -294,6 +351,14 @@ export default function App() {
         isOpen={isGuideModalOpen}
         onClose={() => setIsGuideModalOpen(false)}
       />
+
+      <ApiKeyModal
+        isOpen={isApiKeyModalOpen}
+        onClose={() => setIsApiKeyModalOpen(false)}
+        onSaveKey={handleSaveApiKey}
+        currentKey={clientApiKey}
+      />
     </div>
   );
 }
+
