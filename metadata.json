@@ -1,0 +1,6 @@
+{
+  "name": "binary codex",
+  "description": "decode. compute. create. - Elite coding, binary computation, and software engineering AI.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+@layer base {
+  body {
+    font-family: 'JetBrains Mono', 'Space Mono', monospace, ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas;
+    background-color: #f8faf9;
+    color: #111827;
+  }
+}
+
+/* Custom scrollbar for dark terminal code blocks */
+.terminal-scrollbar::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.terminal-scrollbar::-webkit-scrollbar-track {
+  background: #0d1310;
+}
+.terminal-scrollbar::-webkit-scrollbar-thumb {
+  background: #1f3627;
+  border-radius: 3px;
+}
+.terminal-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: #00c853;
+}
+
+/* 0 and 1 Falling Matrix Animation Keyframes */
+@keyframes matrixRain {
+  0% {
+    transform: translateY(-20%);
+    opacity: 0;
+  }
+  20% {
+    opacity: 0.8;
+  }
+  80% {
+    opacity: 0.6;
+  }
+  100% {
+    transform: translateY(100%);
+    opacity: 0;
+  }
+}
+
+.animate-binary-flow {
+  animation: matrixRain 8s linear infinite;
+}
+
+@keyframes pulseGlow {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(0.9);
+  }
+}
+
+.animate-pulse-glow {
+  animation: pulseGlow 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
